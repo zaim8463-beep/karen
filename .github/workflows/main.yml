@@ -26,21 +26,39 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Locate Android Project
         shell: bash
         run: |
-          PROJECT_FILE=$(find . -name settings.gradle.kts \
-            -not -path '*/.gradle/*' | head -n 1)
+          PROJECT_FILE=$(find . -type f \
+            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
+            -not -path "*/.git/*" \
+            -not -path "*/.gradle/*" \
+            -print -quit)
 
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "Android project not found!"
-            exit 1
+          if [ -n "$PROJECT_FILE" ]; then
+            PROJECT_DIR=$(dirname "$PROJECT_FILE")
+          else
+            APP_FILE=$(find . -type f \
+              \( -path "*/app/build.gradle.kts" -o -path "*/app/build.gradle" \) \
+              -not -path "*/.git/*" \
+              -not -path "*/.gradle/*" \
+              -print -quit)
+
+            if [ -z "$APP_FILE" ]; then
+              echo "Android project not found!"
+              echo "Repository contents:"
+              find . -maxdepth 5 -type f | head -n 150
+              exit 1
+            fi
+
+            PROJECT_DIR=$(dirname "$(dirname "$APP_FILE")")
           fi
 
-          PROJECT_DIR=$(dirname "$PROJECT_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo "Project found: $PROJECT_DIR"
+          echo "Android project found: $PROJECT_DIR"
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
@@ -48,8 +66,8 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug APK
-        run: gradle --no-daemon assembleDebug
         working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
