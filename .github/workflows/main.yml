@@ -26,27 +26,44 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Extract Karen ZIP
+        shell: bash
+        run: |
+          ARCHIVE=$(find . -maxdepth 3 -type f \
+            -iname "Karen.zip" \
+            -not -path "*/.git/*" \
+            -print -quit)
+
+          if [ -z "$ARCHIVE" ]; then
+            echo "Karen.zip not found!"
+            find . -maxdepth 3 -type f
+            exit 1
+          fi
+
+          mkdir -p extracted
+          unzip -o "$ARCHIVE" -d extracted
+
+          echo "ZIP extracted successfully!"
+
       - name: Locate Android Project
         shell: bash
         run: |
-          PROJECT_FILE=$(find . -type f \
+          PROJECT_FILE=$(find extracted -type f \
             \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
-            -not -path "*/.git/*" \
             -not -path "*/.gradle/*" \
             -print -quit)
 
           if [ -n "$PROJECT_FILE" ]; then
             PROJECT_DIR=$(dirname "$PROJECT_FILE")
           else
-            APP_FILE=$(find . -type f \
+            APP_FILE=$(find extracted -type f \
               \( -path "*/app/build.gradle.kts" -o -path "*/app/build.gradle" \) \
-              -not -path "*/.git/*" \
               -not -path "*/.gradle/*" \
               -print -quit)
 
             if [ -z "$APP_FILE" ]; then
-              echo "Android project not found!"
-              find . -maxdepth 5 -type f | head -n 150
+              echo "Android project not found inside Karen.zip!"
+              find extracted -maxdepth 6 -type f | head -n 200
               exit 1
             fi
 
@@ -54,18 +71,12 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project found: $PROJECT_DIR"
+          echo "Found project: $PROJECT_DIR"
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-
-      - name: Check Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls "$ANDROID_HOME/platforms"
 
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
